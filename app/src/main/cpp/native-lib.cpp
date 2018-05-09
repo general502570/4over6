@@ -1,4 +1,4 @@
-#include <jni.h>
+
 #include <string>
 #include <string.h>
 #include "4v6.h"

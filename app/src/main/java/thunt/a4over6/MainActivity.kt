@@ -3,6 +3,7 @@ package thunt.a4over6
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import kotlinx.android.synthetic.main.activity_main.*
+import java.io.*
 
 class MainActivity : AppCompatActivity() {
 
@@ -24,6 +25,12 @@ class MainActivity : AppCompatActivity() {
      */
     external fun stringFromJNI(): String
     external fun stringclickedFromJNI(x: Int): String
+
+    fun Readip(){
+        /*val currentDir = System.getProperty()
+        val file = File(currentDir, "4over6_c2j")
+        val fileInputStream: FileInputStream = file*/
+    }
 
     companion object {
 

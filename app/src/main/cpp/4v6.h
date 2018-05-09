@@ -1,6 +1,9 @@
 #ifndef IP4V6
 #define IP4V6
 
+#include <jni.h>
+#include <android/log.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -39,19 +42,19 @@ struct Message
 #define MSG_HEARTBEAT   104
 
 #define JAVA_JNI_UNIX_SOCKET_PATH "/tmp/4over6.sock"
-#define JAVA_JNI_PIPE_JTOC_PATH "/tmp/4over6.jtoc"
-#define JAVA_JNI_PIPE_CTOJ_PATH "/tmp/4over6.ctoj"
+#define JAVA_JNI_PIPE_JTOC_PATH "/data/data/thunt.a4over6/4over6.jtoc"
+#define JAVA_JNI_PIPE_CTOJ_PATH "/data/data/thunt.a4over6/4over6.ctoj"
 #define JAVA_JNI_PIPE_BUFFER_MAX_SIZE 1024
 #define JAVA_JNI_PIPE_OPCODE_SHUTDOWN 100
 
-#define JNI 0
+#define JNI 1
 #if JNI
 #define DBG_TAG "Back JNI"
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, DBG_TAG, __VA_ARGS__)
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
-#define LOGF(...) __android_log_print(ANDROID_LOG_FATAL, TAG, __VA_ARGS__)
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "JNITag", __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,"JNITag", __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,"JNITag", __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,"JNITag", __VA_ARGS__)
+#define LOGF(...) __android_log_print(ANDROID_LOG_FATAL,"JNITag", __VA_ARGS__)
 #else
 #define LOGD(...) do {printf("Debug: "); printf(__VA_ARGS__); } while(0)
 #define LOGI(...) do {printf("Info: "); printf(__VA_ARGS__); } while(0)
@@ -59,18 +62,17 @@ struct Message
 #define LOGE(...) do {printf("Error: "); printf(__VA_ARGS__); } while(0)
 #define LOGF(...) do {printf("Fatal: "); printf(__VA_ARGS__); } while(0)
 #endif
-#define CHECK(expr)                                                      \
+#define CHK(expr)                                                      \
     do                                                                   \
     {                                                                    \
         int val;                                                         \
         if ((val = (expr)) == -1)                                         \
         {                                                                \
             LOGF("(line %d): ERROR - %d:%s.\n", __LINE__, val, strerror(errno)); \
-            exit(1);                                                     \
         }                                                                \
     } while (0)
 
-#define CHECK_WRITE(expr)                                                              \
+#define CHK_WRITE(expr)                                                              \
     do                                                                           \
     {                                                                            \
         int val;                                                                 \
@@ -80,6 +82,7 @@ struct Message
         }                                                                        \
     } while (0)
 
+inline
 void printMSG(struct Message* msg) {
     LOGD("MSG: len=%d, type=%d, data=%p\n", msg->length, msg->type, msg->data);
 }

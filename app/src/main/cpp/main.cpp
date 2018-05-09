@@ -26,14 +26,14 @@ void connect2Server() {
     bzero(&server_socket, sizeof(server_socket));
     server_socket.sin6_family = AF_INET6;
     server_socket.sin6_port = htons(SERVER_PORT);
-    CHECK(inet_pton(AF_INET6, SERVER_ADDR, &server_socket.sin6_addr));
+    CHK(inet_pton(AF_INET6, SERVER_ADDR, &server_socket.sin6_addr));
     LOGD("v6 address set\n");
 
-    CHECK(client_socket = socket(AF_INET6, SOCK_STREAM, 0));
+    CHK(client_socket = socket(AF_INET6, SOCK_STREAM, 0));
     LOGD("client_socket: %d\n", client_socket);
     LOGD("create client socket v6\n");
 
-    CHECK(connect(client_socket, (const struct sockaddr *)&server_socket, sizeof(server_socket)));
+    CHK(connect(client_socket, (const struct sockaddr *)&server_socket, sizeof(server_socket)));
     LOGD("connect to server\n");
 }
 
@@ -48,7 +48,7 @@ void initPipe() {
         LOGD("create read file (j2c) id: %d\n", j2cid);
     }
     (fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC | O_NONBLOCK)); //debug only
-    // CHECK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC));
+    // CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC));
     (fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR|O_CREAT|O_TRUNC));
 }
 
@@ -73,7 +73,7 @@ void* initTimer(void *foo) {
         if (heart_beat_cnt == 0) {
             int len;
             // send heart beat package
-            CHECK(len = send(client_socket, buffer, 5, 0));
+            CHK(len = send(client_socket, buffer, 5, 0));
             if (len != 5) {
                 LOGF("Send heart beat package error\n");
             }
@@ -85,7 +85,7 @@ void* initTimer(void *foo) {
 
         sprintf(fifo_buf, "%d %d %d %d%c", outlen, outtimes, inlen, intimes, '\0');
         int writelen;
-        CHECK_WRITE(writelen = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
+        CHK_WRITE(writelen = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
         if (writelen < strlen(fifo_buf) + 1) {
             LOGE("write stats to fifo_stats_handler error!\n");
         }
@@ -104,7 +104,7 @@ void* initTimer(void *foo) {
     bzero(fifo_buf, MAX_BUF_SIZE+1);
     sprintf(fifo_buf, "-1 -1 -1 -1");
     int wrt_len;
-    CHECK_WRITE(wrt_len = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
+    CHK_WRITE(wrt_len = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
     if (wrt_len < strlen(fifo_buf) + 1) {
         LOGE("write stats to fifo_stats_handler error!\n");
     }
@@ -122,7 +122,7 @@ void* send2Server(void *foo) {
         bzero(buffer, MAX_BUF_SIZE+1);
         bzero(&msg, sizeof(msg));
 
-        CHECK(len = read(tunnel_handler, buffer, MAX_BUF_SIZE));
+        CHK(len = read(tunnel_handler, buffer, MAX_BUF_SIZE));
         LOGD("Get data from frontend. Total %d bytes\n", len);
         msg.length = len + 5;
         msg.type = MSG_DATA_REQ;
@@ -130,7 +130,7 @@ void* send2Server(void *foo) {
         memcpy(buffer, &msg, sizeof(msg));
 
         // Send package to server
-        CHECK(len = send(client_socket, buffer, sizeof(msg), 0));
+        CHK(len = send(client_socket, buffer, sizeof(msg), 0));
         if (len != sizeof(msg)) {
             LOGE("Send data package error!\n");
         }
@@ -151,7 +151,7 @@ void* stopListening(void *foo) {
 
     while (alive) {
         int len;
-        CHECK(len = read(fifo_handler, buffer, MAX_BUF_SIZE));
+        CHK(len = read(fifo_handler, buffer, MAX_BUF_SIZE));
         if (buffer[0] == '9' && buffer[1] == '9' && buffer[2] == '9') {
             alive = false;
         }
@@ -177,13 +177,13 @@ void init() {
 
 // close all of the handler, release the socket and destory the mutex lock
 void clear() {
-    CHECK(close(client_socket));
-    CHECK(close(tunnel_handler));
-    CHECK(close(fifo_handler));
-    CHECK(close(fifo_stats_handler));
+    CHK(close(client_socket));
+    CHK(close(tunnel_handler));
+    CHK(close(fifo_handler));
+    CHK(close(fifo_stats_handler));
 
-    CHECK(pthread_mutex_destroy(&stat_out));
-    CHECK(pthread_mutex_destroy(&stat_in));
+    CHK(pthread_mutex_destroy(&stat_out));
+    CHK(pthread_mutex_destroy(&stat_in));
 }
 
 int main() {
@@ -202,14 +202,14 @@ int main() {
     msg.length = sizeof(msg);
     msg.type = MSG_IP_REQ;
     memcpy(buffer, &msg, sizeof(msg));
-    CHECK(send(client_socket, buffer, sizeof(msg), 0));
+    CHK(send(client_socket, buffer, sizeof(msg), 0));
 
     int len;
     // parse received packages
     while(alive) {
         bzero(buffer, MAX_BUF_SIZE+1);
 
-        CHECK(len = recv(client_socket, buffer, sizeof(struct Message), 0));
+        CHK(len = recv(client_socket, buffer, sizeof(struct Message), 0));
         LOGD("Recv package from server. Total %d bytes.\n", len);
 
         bzero(&msg, sizeof(msg));
@@ -221,7 +221,7 @@ int main() {
             sprintf(buffer, "%s%d", msg.data, client_socket);
             len = strlen(buffer) + 1;
             int size;
-            CHECK_WRITE(size = write(fifo_handler, buffer, len));
+            CHK_WRITE(size = write(fifo_handler, buffer, len));
             if (len != size) {
                 LOGE("write fifo_handler error!");
                 exit(1);
@@ -230,7 +230,7 @@ int main() {
             sleep(1);
 
             bzero(buffer, MAX_BUF_SIZE+1);
-            CHECK(len = read(fifo_handler, buffer, MAX_BUF_SIZE));
+            CHK(len = read(fifo_handler, buffer, MAX_BUF_SIZE));
             if(len != sizeof(int)) {
                 LOGD("fifo_handler read error!");
                 exit(1);
@@ -248,7 +248,7 @@ int main() {
             hasIP = true;
         } else if (msg.type == MSG_DATA_RSB) {
             LOGD("Type: Data response. Len: %d Contents: %s", msg.length, msg.data);
-            CHECK_WRITE(len = write(tunnel_handler, msg.data, msg.length - 5));
+            CHK_WRITE(len = write(tunnel_handler, msg.data, msg.length - 5));
             if (len != msg.length -5) {
                 LOGE("Send data to frontend error!\n");
             }

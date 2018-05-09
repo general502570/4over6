@@ -25,11 +25,20 @@ class MainActivity : AppCompatActivity() {
      */
     external fun stringFromJNI(): String
     external fun stringclickedFromJNI(x: Int): String
+    val JAVA_JNI_PIPE_JTOC_PATH = "/data/data/thunt.a4over6/4over6.jtoc"
+    val JAVA_JNI_PIPE_CTOJ_PATH = "/data/data/thunt.a4over6/4over6.ctoj"
 
-    fun Readip(){
-        /*val currentDir = System.getProperty()
-        val file = File(currentDir, "4over6_c2j")
-        val fileInputStream: FileInputStream = file*/
+    fun ReadPipe(): String {
+        val file = File(JAVA_JNI_PIPE_CTOJ_PATH)
+        val bufferedReader: BufferedReader = file.bufferedReader()
+        val inputString = bufferedReader.use { it.readLine() }
+        return inputString
+    }
+
+    fun WritePipe(cont: String) {
+        val file = File(JAVA_JNI_PIPE_JTOC_PATH)
+        val bufferWriter: BufferedWriter = file.bufferedWriter()
+        bufferWriter.use { out->out.write(cont) }
     }
 
     companion object {

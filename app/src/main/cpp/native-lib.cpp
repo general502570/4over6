@@ -16,11 +16,6 @@ extern "C"
 JNIEXPORT jstring JNICALL
 Java_thunt_a4over6_MainActivity_stringclickedFromJNI(
         JNIEnv *env, jobject /* this */, jint x) {
-    
-    LOGD("Backend 4over6 thread Starts!");
-    main();
-    LOGD("Backend 4over6 thread Ends!");
-    
     std::string hello = "Backend start!";
     char c[2];
     c[0] = x + 'a';
@@ -28,4 +23,15 @@ Java_thunt_a4over6_MainActivity_stringclickedFromJNI(
     std::string hello2 = c;
     hello += hello2;
     return env->NewStringUTF(hello.c_str());
+}
+
+extern "C"
+JNIEXPORT jint JNICALL
+Java_thunt_a4over6_MainActivity_startCPP(
+        JNIEnv *env, jobject /* this */) {
+
+    LOGD("Backend 4over6 thread Starts!");
+    main();
+    LOGD("Backend 4over6 thread Ends!");
+    return 0;
 }

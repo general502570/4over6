@@ -47,10 +47,20 @@ void initPipe() {
         int j2cid = mknod(JAVA_JNI_PIPE_JTOC_PATH, S_IFIFO | 0666, 0);
         LOGD("create read file (j2c) id: %d\n", j2cid);
     }
-    (fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC | O_NONBLOCK)); //debug only
-    // CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC));
-    (fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR|O_CREAT|O_TRUNC));
+//    CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC | O_NONBLOCK));
+
+    CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDWR | O_CREAT | O_TRUNC)); //debug only
+    LOGD("fifo_handler opened, %d\n", fifo_handler);
+    CHK(close(fifo_handler));
+
+    CHK(fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR|O_CREAT|O_TRUNC));
+    LOGD("fifo_stats_handler opened, %d\n", fifo_stats_handler);
+    CHK(close(fifo_stats_handler));
 }
+
+// int pipeRead(char *) {
+//     int len;
+// }
 
 void* initTimer(void *foo) {
     struct Message heart_beat;
@@ -83,12 +93,15 @@ void* initTimer(void *foo) {
             heart_beat_cnt--;
         }
 
-        sprintf(fifo_buf, "%d %d %d %d%c", outlen, outtimes, inlen, intimes, '\0');
-        int writelen;
-        CHK_WRITE(writelen = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
-        if (writelen < strlen(fifo_buf) + 1) {
+        sprintf(fifo_buf, "%d %d %d %d %d%c", outlen, outtimes, inlen, intimes, 54, '\0');
+        int write_len;
+
+        CHK(fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR | O_CREAT | O_TRUNC));
+        CHK_WRITE(write_len = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
+        if (write_len < strlen(fifo_buf) + 1) {
             LOGE("write stats to fifo_stats_handler error!\n");
         }
+        CHK(close(fifo_stats_handler));
 
         //clear stats
         pthread_mutex_lock(&stat_out);
@@ -102,13 +115,15 @@ void* initTimer(void *foo) {
     }
 
     bzero(fifo_buf, MAX_BUF_SIZE+1);
-    sprintf(fifo_buf, "-1 -1 -1 -1");
+    sprintf(fifo_buf, "-1 -1 -1 -1 -1%c", '\0');
     int wrt_len;
+    CHK(fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR | O_CREAT | O_TRUNC));
     CHK_WRITE(wrt_len = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
     if (wrt_len < strlen(fifo_buf) + 1) {
         LOGE("write stats to fifo_stats_handler error!\n");
     }
     LOGD("timer thread exit\n");
+    CHK(close(fifo_stats_handler));
     return NULL;
 }
 
@@ -221,20 +236,31 @@ int main() {
             sprintf(buffer, "%s%d", msg.data, client_socket);
             len = strlen(buffer) + 1;
             int size;
-            CHK_WRITE(size = write(fifo_handler, buffer, len));
+
+            CHK(fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR | O_CREAT | O_TRUNC));
+            CHK_WRITE(size = write(fifo_stats_handler, buffer, len));
+            CHK(close(fifo_stats_handler));
             if (len != size) {
                 LOGE("write fifo_handler error!");
                 exit(1);
             }
 
             sleep(1);
+            LOGD("len = %d", len);
 
             bzero(buffer, MAX_BUF_SIZE+1);
-            CHK(len = read(fifo_handler, buffer, MAX_BUF_SIZE));
-            if(len != sizeof(int)) {
-                LOGD("fifo_handler read error!");
-                exit(1);
-            }
+            CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC));
+            while((len = read(fifo_handler, buffer, MAX_BUF_SIZE)) != sizeof(int)){
+                CHK(close(fifo_handler));
+                sleep(1);
+                CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC));
+                LOGD("read len = %d, content: %d, waiting for handler...", len, *(int *)buffer);
+            };
+//            if(len != sizeof(int)) {
+//                LOGD("fifo_handler read error!");
+//                exit(1);
+//            }
+            CHK(close(fifo_handler));
 
             tunnel_handler = *(int *)buffer;
             tunnel_handler = ntohl(tunnel_handler);

@@ -49,12 +49,12 @@ struct Message
 
 #define JNI 1
 #if JNI
-#define DBG_TAG "Back JNI"
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "JNITag", __VA_ARGS__)
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,"JNITag", __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,"JNITag", __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR,"JNITag", __VA_ARGS__)
-#define LOGF(...) __android_log_print(ANDROID_LOG_FATAL,"JNITag", __VA_ARGS__)
+#define DBG_TAG "Backend JNI"
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, DBG_TAG, __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, DBG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, DBG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, DBG_TAG, __VA_ARGS__)
+#define LOGF(...) __android_log_print(ANDROID_LOG_FATAL, DBG_TAG, __VA_ARGS__)
 #else
 #define LOGD(...) do {printf("Debug: "); printf(__VA_ARGS__); } while(0)
 #define LOGI(...) do {printf("Info: "); printf(__VA_ARGS__); } while(0)
@@ -69,6 +69,7 @@ struct Message
         if ((val = (expr)) == -1)                                         \
         {                                                                \
             LOGF("(line %d): ERROR - %d:%s.\n", __LINE__, val, strerror(errno)); \
+            exit(1);                                                     \
         }                                                                \
     } while (0)
 

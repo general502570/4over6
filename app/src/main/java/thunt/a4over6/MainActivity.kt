@@ -19,7 +19,11 @@ class MainActivity : AppCompatActivity() {
 
         mainbutton.setOnClickListener{
             sample_text.text = stringclickedFromJNI(1)
-            threadCPP()
+            println("button clicked")
+            if (! hasThread) {
+                hasThread = true
+                threadCPP()
+            }
             sample_text.text = beginWork()
         }
     }
@@ -34,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     val JAVA_JNI_PIPE_JTOC_PATH = "/data/data/thunt.a4over6/4over6.jtoc"
     val JAVA_JNI_PIPE_CTOJ_PATH = "/data/data/thunt.a4over6/4over6.ctoj"
     lateinit var ipPacket: IpPacket
+    var hasThread: Boolean = false
 
     class IpPacket(info: String) {
         val infopiece = info.split(" ")
@@ -45,9 +50,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun ReadPipe(): String? {
+        println("Readpipebegin")
         val file = File(JAVA_JNI_PIPE_CTOJ_PATH)
-        val bufferedReader: BufferedReader = file.bufferedReader()
+        println("Readpipebegin")
+        //val bufferedReader: BufferedReader = file.bufferedReader()
+        val bufferedReader = BufferedReader(FileReader(file))
+        println("Readpipebegin")
         val inputString = bufferedReader.use { it.readLine() }
+        println("Readpipe")
+        bufferedReader.close()
         return inputString
     }
 
@@ -55,6 +66,7 @@ class MainActivity : AppCompatActivity() {
         val file = File(JAVA_JNI_PIPE_JTOC_PATH)
         val bufferWriter: BufferedWriter = file.bufferedWriter()
         bufferWriter.use { out->out.write(cont) }
+        bufferWriter.close()
     }
 
     fun StartVPN() {
@@ -72,7 +84,9 @@ class MainActivity : AppCompatActivity() {
                 startCPP()
             }
         }
+        println("Start thread")
         thread.start()
+        println("Start after thread")
         return thread
     }
 
@@ -89,10 +103,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun beginWork() : String {
+        println("Begin work")
         var ipstring = ReadPipe()
         while (ipstring == null) {
             ipstring = ReadPipe()
         }
+        println("Get ip")
         return "Successfully read!"
     }
 

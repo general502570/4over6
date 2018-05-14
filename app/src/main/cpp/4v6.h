@@ -41,11 +41,15 @@ struct Message
 #define MSG_DATA_RSB    103
 #define MSG_HEARTBEAT   104
 
-#define JAVA_JNI_UNIX_SOCKET_PATH "/tmp/4over6.sock"
-#define JAVA_JNI_PIPE_JTOC_PATH "/data/data/thunt.a4over6/4over6.jtoc"
-#define JAVA_JNI_PIPE_CTOJ_PATH "/data/data/thunt.a4over6/4over6.ctoj"
-#define JAVA_JNI_PIPE_BUFFER_MAX_SIZE 1024
-#define JAVA_JNI_PIPE_OPCODE_SHUTDOWN 100
+// #define JAVA_JNI_UNIX_SOCKET_PATH "/tmp/4over6.sock"
+#define JNI_IP_PIPE_PATH    "/data/data/thunt.a4over6/4over6.ip"
+#define JNI_STATS_PIPE_PATH "/data/data/thunt.a4over6/4over6.stats"
+#define JNI_DES_PIPE_PATH   "/data/data/thunt.a4over6/4over6.des"
+// #define JAVA_JNI_PIPE_BUFFER_MAX_SIZE 1024
+// #define JAVA_JNI_PIPE_OPCODE_SHUTDOWN 100
+
+#define WRITE_IP    0
+#define WRITE_STATS 1
 
 #define JNI 1
 #if JNI

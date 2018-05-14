@@ -37,6 +37,11 @@ class MainActivity : AppCompatActivity() {
     external fun startCPP(): Int
     val JAVA_JNI_PIPE_JTOC_PATH = "/data/data/thunt.a4over6/4over6.jtoc"
     val JAVA_JNI_PIPE_CTOJ_PATH = "/data/data/thunt.a4over6/4over6.ctoj"
+
+    val JNI_IP_PIPE_PATH    = "/data/data/thunt.a4over6/4over6.ip"
+    val JNI_STATS_PIPE_PATH = "/data/data/thunt.a4over6/4over6.stats"
+    val JNI_DES_PIPE_PATH   = "/data/data/thunt.a4over6/4over6.des"
+
     lateinit var ipPacket: IpPacket
     var hasThread: Boolean = false
 
@@ -50,20 +55,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun ReadPipe(): String? {
-        println("Readpipebegin")
-        val file = File(JAVA_JNI_PIPE_CTOJ_PATH)
-        println("Readpipebegin")
+        val file = File(JNI_IP_PIPE_PATH)
         //val bufferedReader: BufferedReader = file.bufferedReader()
         val bufferedReader = BufferedReader(FileReader(file))
         println("Readpipebegin")
         val inputString = bufferedReader.use { it.readLine() }
-        println("Readpipe")
+        println("Readpipe, " + inputString)
         bufferedReader.close()
         return inputString
     }
 
     fun WritePipe(cont: String) {
-        val file = File(JAVA_JNI_PIPE_JTOC_PATH)
+        val file = File(JNI_DES_PIPE_PATH)
         val bufferWriter: BufferedWriter = file.bufferedWriter()
         bufferWriter.use { out->out.write(cont) }
         bufferWriter.close()

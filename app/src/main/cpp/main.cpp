@@ -10,9 +10,11 @@ int heart_beat_cnt;
 
 int client_socket;
 // front-end to back-end handle
-int fifo_handler;
-//back-end to front-end handle
-int fifo_stats_handler;
+int des_pipe;
+// back-end to front-end ip handle
+int ip_pipe;
+//back-end to front-end stats handle
+int stats_pipe;
 // back-end to server handle
 int tunnel_handler;
 
@@ -39,28 +41,53 @@ void connect2Server() {
 
 
 void initPipe() {
-    if (access(JAVA_JNI_PIPE_CTOJ_PATH, F_OK) == -1) {
-        int c2jid = mknod(JAVA_JNI_PIPE_CTOJ_PATH, S_IFIFO | 0666, 0);
-        LOGD("create write file (c2j) id: %d\n", c2jid);
+    if (access(JNI_STATS_PIPE_PATH, F_OK) == -1) {
+        int stats_id = mknod(JNI_STATS_PIPE_PATH, S_IFIFO | 0666, 0);
+        LOGD("create write file (stats) id: %d\n", stats_id);
     }
-    if (access(JAVA_JNI_PIPE_JTOC_PATH, F_OK) == -1) {
-        int j2cid = mknod(JAVA_JNI_PIPE_JTOC_PATH, S_IFIFO | 0666, 0);
-        LOGD("create read file (j2c) id: %d\n", j2cid);
+    if (access(JNI_IP_PIPE_PATH, F_OK) == -1) {
+        int ip_id = mknod(JNI_IP_PIPE_PATH, S_IFIFO | 0666, 0);
+        LOGD("create read file (ip) id: %d\n", ip_id);
     }
-//    CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC | O_NONBLOCK));
+    if (access(JNI_DES_PIPE_PATH, F_OK) == -1) {
+        int des_id = mknod(JNI_DES_PIPE_PATH, S_IFIFO | 0666, 0);
+        LOGD("create read file (des) id: %d\n", des_id);
+    }
+    //    CHK(ip_pipe = open(JNI_IP_PIPE_PATH, O_RDONLY | O_CREAT | O_TRUNC | O_NONBLOCK));
 
-    CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDWR | O_CREAT | O_TRUNC)); //debug only
-    LOGD("fifo_handler opened, %d\n", fifo_handler);
-    CHK(close(fifo_handler));
+    CHK(ip_pipe = open(JNI_IP_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC)); //debug only
+    LOGD("ip_pipe ready, %d\n", ip_pipe);
+    CHK(close(ip_pipe));
 
-    CHK(fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR|O_CREAT|O_TRUNC));
-    LOGD("fifo_stats_handler opened, %d\n", fifo_stats_handler);
-    CHK(close(fifo_stats_handler));
+    CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC));
+    LOGD("stats_pipe ready, %d\n", stats_pipe);
+    CHK(close(stats_pipe));
+
+    CHK(des_pipe = open(JNI_DES_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC));
+    LOGD("des_pipe ready, %d\n", des_pipe);
+    CHK(close(des_pipe));
 }
 
-// int pipeRead(char *) {
-//     int len;
-// }
+int readPipe(char* buffer) {
+    CHK(des_pipe = open(JNI_DES_PIPE_PATH, O_RDONLY | O_CREAT | O_TRUNC));
+    int len = read(des_pipe, buffer, MAX_BUF_SIZE);
+    CHK(close(des_pipe));
+    return len;
+}
+
+int writePipe(int type, char *buffer, int length) {
+    int len;
+    if (type == WRITE_IP) {
+        CHK(ip_pipe = open(JNI_IP_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC)); //debug only
+        len = write(ip_pipe, buffer, length);
+        CHK(close(ip_pipe));
+    } else {
+        CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC));
+        len = write(stats_pipe, buffer, length);
+        CHK(close(stats_pipe));
+    }
+    return len;
+}
 
 void* initTimer(void *foo) {
     struct Message heart_beat;
@@ -96,12 +123,13 @@ void* initTimer(void *foo) {
         sprintf(fifo_buf, "%d %d %d %d %d%c", outlen, outtimes, inlen, intimes, 54, '\0');
         int write_len;
 
-        CHK(fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR | O_CREAT | O_TRUNC));
-        CHK_WRITE(write_len = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
+        // CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC));
+        // CHK_WRITE(write_len = write(stats_pipe, fifo_buf, strlen(fifo_buf) + 1));
+        // CHK(close(stats_pipe));
+        CHK_WRITE(write_len = writePipe(WRITE_STATS, fifo_buf, strlen(fifo_buf) + 1));
         if (write_len < strlen(fifo_buf) + 1) {
-            LOGE("write stats to fifo_stats_handler error!\n");
+            LOGE("write stats to stats_pipe error!\n");
         }
-        CHK(close(fifo_stats_handler));
 
         //clear stats
         pthread_mutex_lock(&stat_out);
@@ -117,13 +145,14 @@ void* initTimer(void *foo) {
     bzero(fifo_buf, MAX_BUF_SIZE+1);
     sprintf(fifo_buf, "-1 -1 -1 -1 -1%c", '\0');
     int wrt_len;
-    CHK(fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR | O_CREAT | O_TRUNC));
-    CHK_WRITE(wrt_len = write(fifo_stats_handler, fifo_buf, strlen(fifo_buf) + 1));
+    // CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC));
+    // CHK_WRITE(wrt_len = write(stats_pipe, fifo_buf, strlen(fifo_buf) + 1));
+    // CHK(close(stats_pipe));
+    CHK_WRITE(wrt_len = writePipe(WRITE_STATS, fifo_buf, strlen(fifo_buf) + 1));
     if (wrt_len < strlen(fifo_buf) + 1) {
-        LOGE("write stats to fifo_stats_handler error!\n");
+        LOGE("write stats to stats_pipe error!\n");
     }
     LOGD("timer thread exit\n");
-    CHK(close(fifo_stats_handler));
     return NULL;
 }
 
@@ -159,15 +188,16 @@ void* send2Server(void *foo) {
     return NULL;
 }
 
-// monitor the fifo_handler and stop listening when receiving 999
+// monitor the ip_pipe and stop listening when receiving 999
 void* stopListening(void *foo) {
     char buffer[MAX_BUF_SIZE+1];
     bzero(buffer, MAX_BUF_SIZE+1);
 
     while (alive) {
         int len;
-        CHK(len = read(fifo_handler, buffer, MAX_BUF_SIZE));
-        if (buffer[0] == '9' && buffer[1] == '9' && buffer[2] == '9') {
+        // CHK(len = read(ip_pipe, buffer, MAX_BUF_SIZE));
+        CHK(len = readPipe(buffer));
+        if (buffer[0] == 'q' && buffer[1] == '1' && buffer[2] == 'j') {
             alive = false;
         }
     }
@@ -194,8 +224,8 @@ void init() {
 void clear() {
     CHK(close(client_socket));
     CHK(close(tunnel_handler));
-    CHK(close(fifo_handler));
-    CHK(close(fifo_stats_handler));
+    // CHK(close(ip_pipe));
+    // CHK(close(stats_pipe));
 
     CHK(pthread_mutex_destroy(&stat_out));
     CHK(pthread_mutex_destroy(&stat_in));
@@ -233,15 +263,14 @@ int main() {
             LOGD("Type: IP response. Contents: %s", msg.data);
             
             bzero(buffer, MAX_BUF_SIZE+1);
-            sprintf(buffer, "%s%d", msg.data, client_socket);
+            // sprintf(buffer, "%s%d", msg.data, client_socket);
+            sprintf(buffer, "%s", msg.data);
             len = strlen(buffer) + 1;
             int size;
 
-            CHK(fifo_stats_handler = open(JAVA_JNI_PIPE_CTOJ_PATH, O_RDWR | O_CREAT | O_TRUNC));
-            CHK_WRITE(size = write(fifo_stats_handler, buffer, len));
-            CHK(close(fifo_stats_handler));
+            CHK_WRITE(size = writePipe(WRITE_IP, buffer, len));
             if (len != size) {
-                LOGE("write fifo_handler error!");
+                LOGE("write ip_pipe error!");
                 exit(1);
             }
 
@@ -249,18 +278,10 @@ int main() {
             LOGD("len = %d", len);
 
             bzero(buffer, MAX_BUF_SIZE+1);
-            CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC));
-            while((len = read(fifo_handler, buffer, MAX_BUF_SIZE)) != sizeof(int)){
-                CHK(close(fifo_handler));
+            while((len = readPipe(buffer)) != sizeof(int)){
                 sleep(1);
-                CHK(fifo_handler = open(JAVA_JNI_PIPE_JTOC_PATH, O_RDONLY | O_CREAT | O_TRUNC));
                 LOGD("read len = %d, content: %d, waiting for handler...", len, *(int *)buffer);
             };
-//            if(len != sizeof(int)) {
-//                LOGD("fifo_handler read error!");
-//                exit(1);
-//            }
-            CHK(close(fifo_handler));
 
             tunnel_handler = *(int *)buffer;
             tunnel_handler = ntohl(tunnel_handler);

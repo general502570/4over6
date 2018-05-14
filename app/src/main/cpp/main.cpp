@@ -109,11 +109,11 @@ void* initTimer(void *foo) {
     struct Message heart_beat;
     bzero(&heart_beat, sizeof(heart_beat));
     heart_beat.type = MSG_HEARTBEAT;
-    heart_beat.length = sizeof(heart_beat);
+    heart_beat.length = 5;
     
     char buffer[MAX_BUF_SIZE+1];
     bzero(buffer, MAX_BUF_SIZE+1);
-    memcpy(buffer, &heart_beat, sizeof(struct Message));
+    memcpy(buffer, &heart_beat, 5);
 
     char fifo_buf[MAX_BUF_SIZE+1];
 
@@ -121,12 +121,12 @@ void* initTimer(void *foo) {
         int current_time = time((time_t*) NULL);
         if (current_time - heart_beat_recv_time > 60) {
             LOGE("Server timeout\n");
-            exit(1);
+//            exit(1);
         }
         if (heart_beat_cnt == 0) {
             int len;
             // send heart beat package
-            CHK(len = safe_send(client_socket, buffer, 5));
+            CHK(len = send(client_socket, buffer, 5, 0));
             if (len != 5) {
                 LOGF("Send heart beat package error\n");
             } else {
@@ -186,21 +186,21 @@ void* send2Server(void *foo) {
         bzero(&msg, sizeof(msg));
 
         while ((len = read(tunnel_handler, buffer, MAX_BUF_SIZE)) < 0){
-            usleep(10000);
+            usleep(1000);
         };
-        // LOGD("Get data from frontend. Total %d bytes\n", len);
-        msg.length = len + 5 - 0;
+//         LOGD("Get data from frontend. Total %d bytes\n", len);
+        msg.length = len + 5;
         msg.type = MSG_DATA_REQ;
-        memcpy(msg.data, buffer+0, len-0);
+        memcpy(msg.data, buffer, len);
         bzero(buffer, MAX_BUF_SIZE+1);
-        memcpy(buffer, &msg, sizeof(msg));
+        memcpy(buffer, &msg, msg.length);
 
         // Send package to server
-        CHK(len = safe_send(client_socket, buffer, sizeof(msg)));
-        if (len != sizeof(msg)) {
+        CHK(len = safe_send(client_socket, buffer, msg.length));
+        if (len != msg.length) {
             LOGE("Send data package error!\n");
-        } else{
-            // LOGD("Send data package to server, content: %d, %d, %s\n", *(int*)buffer, int(*(buffer+4)), buffer+8);
+        } else {
+//             LOGD("Send data package to server, content: %d, %d\n", *(int*)buffer, int(*(buffer+4)));
         }
 
         pthread_mutex_lock(&stat_out);
@@ -242,7 +242,7 @@ void init() {
 
     initPipe();
     connect2Server();
-    // connect2ServerV4();
+//     connect2ServerV4();
 }
 
 // close all of the handler, release the socket and destory the mutex lock
@@ -269,17 +269,23 @@ int main() {
     // require IP from server
     struct Message msg;
     bzero(&msg, sizeof(msg));
-    msg.length = sizeof(msg);
+    msg.length = 5;
     msg.type = MSG_IP_REQ;
-    memcpy(buffer, &msg, sizeof(msg));
-    CHK(safe_send(client_socket, buffer, sizeof(msg)));
+    memcpy(buffer, &msg, msg.length);
+    CHK(safe_send(client_socket, buffer, msg.length));
 
     int len;
+    int msg_len;
     // parse received packages
     while(alive) {
         bzero(buffer, MAX_BUF_SIZE+1);
 
-        CHK(len = recv(client_socket, buffer, sizeof(struct Message), 0));
+        CHK(len = safe_recv(client_socket, buffer, 4));
+        if (len != 4) {
+            LOGD("Recv package hdr error");
+        }
+        msg_len = *(int *)buffer;
+        CHK(len = safe_recv(client_socket, buffer + 4, msg_len));
         // LOGD("Recv package from server. Total %d bytes.\n", len);
 
         bzero(&msg, sizeof(msg));
@@ -299,7 +305,6 @@ int main() {
             CHK_WRITE(size = writePipe(WRITE_IP, buffer, len));
             if (len != size) {
                 LOGE("write ip_pipe error!\n");
-                exit(1);
             }
 
             sleep(1);

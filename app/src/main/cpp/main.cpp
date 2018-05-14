@@ -39,6 +39,22 @@ void connect2Server() {
     LOGD("connect to server\n");
 }
 
+void connect2ServerV4()
+{
+    struct sockaddr_in server_socket;
+    bzero(&server_socket, sizeof(server_socket));
+    server_socket.sin_family = AF_INET;
+    server_socket.sin_port = htons(SERVER_PORT);
+    CHK(inet_pton(AF_INET, SERVER_V4_ADDR, &server_socket.sin_addr));
+    LOGD("v4 address set\n");
+
+    CHK(client_socket = socket(AF_INET, SOCK_STREAM, 0));
+    LOGD("client_socket: %d\n", client_socket);
+    LOGD("create client socket v4\n");
+
+    CHK(connect(client_socket, (const struct sockaddr *)&server_socket, sizeof(server_socket)));
+    LOGD("connect to server v4\n");
+}
 
 void initPipe() {
     if (access(JNI_STATS_PIPE_PATH, F_OK) == -1) {
@@ -69,7 +85,7 @@ void initPipe() {
 }
 
 int readPipe(char* buffer) {
-    CHK(des_pipe = open(JNI_DES_PIPE_PATH, O_RDONLY | O_CREAT | O_TRUNC));
+    CHK(des_pipe = open(JNI_DES_PIPE_PATH, O_RDONLY));
     int len = read(des_pipe, buffer, MAX_BUF_SIZE);
     CHK(close(des_pipe));
     return len;
@@ -78,15 +94,15 @@ int readPipe(char* buffer) {
 int writePipe(int type, char *buffer, int length) {
     int len;
     if (type == WRITE_IP) {
-        CHK(ip_pipe = open(JNI_IP_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC)); //debug only
-        len = write(ip_pipe, buffer, length);
+        CHK(ip_pipe = open(JNI_IP_PIPE_PATH, O_RDWR)); //debug only
+        CHK(safe_write(ip_pipe, buffer, length));
         CHK(close(ip_pipe));
     } else {
-        CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC));
-        len = write(stats_pipe, buffer, length);
+        CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR));
+        CHK(safe_write(stats_pipe, buffer, length));
         CHK(close(stats_pipe));
     }
-    return len;
+    return length;
 }
 
 void* initTimer(void *foo) {
@@ -110,9 +126,11 @@ void* initTimer(void *foo) {
         if (heart_beat_cnt == 0) {
             int len;
             // send heart beat package
-            CHK(len = send(client_socket, buffer, 5, 0));
+            CHK(len = safe_send(client_socket, buffer, 5));
             if (len != 5) {
                 LOGF("Send heart beat package error\n");
+            } else {
+                LOGD("Send heart beat package");
             }
             heart_beat_cnt = MAX_HEART_BEAT_CNT;
         }
@@ -162,21 +180,27 @@ void* send2Server(void *foo) {
     int len;
     struct Message msg;
 
+
     while (alive) {
         bzero(buffer, MAX_BUF_SIZE+1);
         bzero(&msg, sizeof(msg));
 
-        CHK(len = read(tunnel_handler, buffer, MAX_BUF_SIZE));
-        LOGD("Get data from frontend. Total %d bytes\n", len);
-        msg.length = len + 5;
+        while ((len = read(tunnel_handler, buffer, MAX_BUF_SIZE)) < 0){
+            usleep(10000);
+        };
+        // LOGD("Get data from frontend. Total %d bytes\n", len);
+        msg.length = len + 5 - 0;
         msg.type = MSG_DATA_REQ;
-        memcpy(msg.data, buffer, len);
+        memcpy(msg.data, buffer+0, len-0);
+        bzero(buffer, MAX_BUF_SIZE+1);
         memcpy(buffer, &msg, sizeof(msg));
 
         // Send package to server
-        CHK(len = send(client_socket, buffer, sizeof(msg), 0));
+        CHK(len = safe_send(client_socket, buffer, sizeof(msg)));
         if (len != sizeof(msg)) {
             LOGE("Send data package error!\n");
+        } else{
+            // LOGD("Send data package to server, content: %d, %d, %s\n", *(int*)buffer, int(*(buffer+4)), buffer+8);
         }
 
         pthread_mutex_lock(&stat_out);
@@ -218,6 +242,7 @@ void init() {
 
     initPipe();
     connect2Server();
+    // connect2ServerV4();
 }
 
 // close all of the handler, release the socket and destory the mutex lock
@@ -247,7 +272,7 @@ int main() {
     msg.length = sizeof(msg);
     msg.type = MSG_IP_REQ;
     memcpy(buffer, &msg, sizeof(msg));
-    CHK(send(client_socket, buffer, sizeof(msg), 0));
+    CHK(safe_send(client_socket, buffer, sizeof(msg)));
 
     int len;
     // parse received packages
@@ -255,22 +280,25 @@ int main() {
         bzero(buffer, MAX_BUF_SIZE+1);
 
         CHK(len = recv(client_socket, buffer, sizeof(struct Message), 0));
-        LOGD("Recv package from server. Total %d bytes.\n", len);
+        // LOGD("Recv package from server. Total %d bytes.\n", len);
 
         bzero(&msg, sizeof(msg));
         memcpy(&msg, buffer, sizeof(msg));
         if (!hasIP && msg.type == MSG_IP_RSB) {
-            LOGD("Type: IP response. Contents: %s", msg.data);
+            LOGD("Type: IP response. Contents: %s\n", msg.data);
             
             bzero(buffer, MAX_BUF_SIZE+1);
-            // sprintf(buffer, "%s%d", msg.data, client_socket);
-            sprintf(buffer, "%s", msg.data);
-            len = strlen(buffer) + 1;
+#ifndef OUR_SERVER
+            sprintf(buffer, "%s%d ", msg.data, client_socket);
+#else
+            sprintf(buffer, "%s %d ", msg.data, client_socket);
+#endif
+            len = int(strlen(buffer) + 1);
             int size;
 
             CHK_WRITE(size = writePipe(WRITE_IP, buffer, len));
             if (len != size) {
-                LOGE("write ip_pipe error!");
+                LOGE("write ip_pipe error!\n");
                 exit(1);
             }
 
@@ -278,14 +306,14 @@ int main() {
             LOGD("len = %d", len);
 
             bzero(buffer, MAX_BUF_SIZE+1);
-            while((len = readPipe(buffer)) != sizeof(int)){
+            while((len = readPipe(buffer)) <= 0){
                 sleep(1);
-                LOGD("read len = %d, content: %d, waiting for handler...", len, *(int *)buffer);
+                LOGD("read len = %d, content: %d, waiting for handler...\n", len, *(int *)buffer);
             };
 
-            tunnel_handler = *(int *)buffer;
-            tunnel_handler = ntohl(tunnel_handler);
+            tunnel_handler = int(*(char *)buffer);
             LOGD("Get tunnel_handler %d from frontend successfully!", tunnel_handler);
+            // tunnel_handler = ntohl(tunnel_handler);
 
             // send to server thread;
             pthread_t send_thd, stop_thd;
@@ -294,8 +322,8 @@ int main() {
             // only the first IP response from server will create thread for communication
             hasIP = true;
         } else if (msg.type == MSG_DATA_RSB) {
-            LOGD("Type: Data response. Len: %d Contents: %s", msg.length, msg.data);
-            CHK_WRITE(len = write(tunnel_handler, msg.data, msg.length - 5));
+            // LOGD("Type: Data response.");
+            CHK_WRITE(len = safe_write(tunnel_handler, msg.data, msg.length - 5));
             if (len != msg.length -5) {
                 LOGE("Send data to frontend error!\n");
             }
@@ -305,10 +333,11 @@ int main() {
             intimes ++;
             pthread_mutex_unlock(&stat_in);
         } else if (msg.type == MSG_HEARTBEAT) {
-            LOGD("Type: Heart beat. Contents: %s\n", msg.data);
-            heart_beat_recv_time = time((time_t *)NULL);
+            LOGD("Type: Heart beat.\n");
+            heart_beat_recv_time = int(time((time_t *)NULL));
         } else {
-            LOGD("Type: Unknown type %d. Contents: %s", msg.type, msg.data);
+            // LOGD("Type: Unknown type %d. Contents: %s\n", msg.type, msg.data);
+            LOGD("Type: Unknown type %d.\n", msg.type);
         }
     }
 

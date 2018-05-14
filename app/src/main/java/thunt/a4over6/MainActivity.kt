@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         val dns1 = infopiece[2]
         val dns2 = infopiece[3]
         val dns3 = infopiece[4]
+        val socket = infopiece[5]
     }
 
     fun ReadPipe(): String? {
@@ -94,6 +95,7 @@ class MainActivity : AppCompatActivity() {
             serviceIntent.putExtra("dns1", ipPacket.dns1)
             serviceIntent.putExtra("dns2", ipPacket.dns2)
             serviceIntent.putExtra("dns3", ipPacket.dns3)
+            serviceIntent.putExtra("socket", ipPacket.socket)
             println("on activity result")
             startService(serviceIntent)
             println("after activity result")

@@ -121,12 +121,13 @@ void* initTimer(void *foo) {
         int current_time = time((time_t*) NULL);
         if (current_time - heart_beat_recv_time > 60) {
             LOGE("Server timeout\n");
+            heart_beat_recv_time = current_time;
 //            exit(1);
         }
         if (heart_beat_cnt == 0) {
             int len;
             // send heart beat package
-            CHK(len = send(client_socket, buffer, 5, 0));
+            CHK(len = safe_send(client_socket, buffer, 5));
             if (len != 5) {
                 LOGF("Send heart beat package error\n");
             } else {
@@ -145,7 +146,7 @@ void* initTimer(void *foo) {
         // CHK_WRITE(write_len = write(stats_pipe, fifo_buf, strlen(fifo_buf) + 1));
         // CHK(close(stats_pipe));
         CHK_WRITE(write_len = writePipe(WRITE_STATS, fifo_buf, strlen(fifo_buf) + 1));
-        if (write_len < strlen(fifo_buf) + 1) {
+        if (write_len != strlen(fifo_buf) + 1) {
             LOGE("write stats to stats_pipe error!\n");
         }
 
@@ -167,7 +168,7 @@ void* initTimer(void *foo) {
     // CHK_WRITE(wrt_len = write(stats_pipe, fifo_buf, strlen(fifo_buf) + 1));
     // CHK(close(stats_pipe));
     CHK_WRITE(wrt_len = writePipe(WRITE_STATS, fifo_buf, strlen(fifo_buf) + 1));
-    if (wrt_len < strlen(fifo_buf) + 1) {
+    if (wrt_len != strlen(fifo_buf) + 1) {
         LOGE("write stats to stats_pipe error!\n");
     }
     LOGD("timer thread exit\n");
@@ -186,7 +187,7 @@ void* send2Server(void *foo) {
         bzero(&msg, sizeof(msg));
 
         while ((len = read(tunnel_handler, buffer, MAX_BUF_SIZE)) < 0){
-            usleep(1000);
+            usleep(100);
         };
 //         LOGD("Get data from frontend. Total %d bytes\n", len);
         msg.length = len + 5;
@@ -200,7 +201,7 @@ void* send2Server(void *foo) {
         if (len != msg.length) {
             LOGE("Send data package error!\n");
         } else {
-//             LOGD("Send data package to server, content: %d, %d\n", *(int*)buffer, int(*(buffer+4)));
+             LOGD("Send data package to server, content: %d, %d\n", *(int*)buffer, int(*(buffer+4)));
         }
 
         pthread_mutex_lock(&stat_out);
@@ -219,10 +220,10 @@ void* stopListening(void *foo) {
 
     while (alive) {
         int len;
-        // CHK(len = read(ip_pipe, buffer, MAX_BUF_SIZE));
         CHK(len = readPipe(buffer));
         if (buffer[0] == 'q' && buffer[1] == '1' && buffer[2] == 'j') {
             alive = false;
+            LOGD("alive is false");
         }
     }
     LOGD("stop listening and exit.\n");
@@ -280,13 +281,13 @@ int main() {
     while(alive) {
         bzero(buffer, MAX_BUF_SIZE+1);
 
-        CHK(len = safe_recv(client_socket, buffer, 4));
+        CHK(len = safe_read(client_socket, buffer, 4));
         if (len != 4) {
             LOGD("Recv package hdr error");
         }
         msg_len = *(int *)buffer;
-        CHK(len = safe_recv(client_socket, buffer + 4, msg_len));
-        // LOGD("Recv package from server. Total %d bytes.\n", len);
+        CHK(len = safe_read(client_socket, buffer + 4, msg_len - 4));
+        LOGD("Recv package from server. Should %d bytes, get Total %d bytes.\n", msg_len - 4, len);
 
         bzero(&msg, sizeof(msg));
         memcpy(&msg, buffer, sizeof(msg));

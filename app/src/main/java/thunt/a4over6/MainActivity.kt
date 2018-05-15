@@ -5,7 +5,9 @@ import android.content.Intent
 import android.net.VpnService
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
 import kotlinx.android.synthetic.main.activity_main.*
+import thunt.a4over6.R.id.async
 import java.io.*
 
 class MainActivity : AppCompatActivity() {
@@ -20,15 +22,10 @@ class MainActivity : AppCompatActivity() {
         mainbutton.setOnClickListener{
             sample_text.text = stringclickedFromJNI(1)
             println("button clicked")
-            if (! hasIpThread) {
-                hasIpThread = true
-                threadCPP()
+            if (! hasMainThread) {
+                hasMainThread = true
+                threadMain()
             }
-            sample_text.text = beginWork()
-//            if (! hasStatsThread) {
-//                hasStatsThread = true
-//                threadStats()
-//            }
         }
     }
 
@@ -48,26 +45,28 @@ class MainActivity : AppCompatActivity() {
     lateinit var ipPacket: IpPacket
     lateinit var ipThread: Thread
     lateinit var statsThread: Thread
+    lateinit var mainThread: Thread
     var hasIpThread: Boolean = false
     var hasStatsThread: Boolean = false
+    var hasMainThread: Boolean = false
 
     class IpPacket(info: String) {
         val infopiece = info.split(" ")
-        val ip = infopiece[0]
-        val route = infopiece[1]
-        val dns1 = infopiece[2]
-        val dns2 = infopiece[3]
-        val dns3 = infopiece[4]
-        val socket = infopiece[5]
+        val ip = infopiece[0].trim()
+        val route = infopiece[1].trim()
+        val dns1 = infopiece[2].trim()
+        val dns2 = infopiece[3].trim()
+        val dns3 = infopiece[4].trim()
+        val socket = infopiece[5].trim()
     }
 
     class StatsPacket(info: String) {
         val infopiece = info.split(" ")
-        val outlen = infopiece[0]
-        val outtimes = infopiece[1]
-        val inlen = infopiece[2]
-        val intimes = infopiece[3]
-        val isvalid = infopiece[4]
+        val outlen = infopiece[0].trim()
+        val outtimes = infopiece[1].trim()
+        val inlen = infopiece[2].trim()
+        val intimes = infopiece[3].trim()
+        val isvalid = infopiece[4].trim()
     }
 
     fun ReadPipe(addr: String): String? {
@@ -86,6 +85,26 @@ class MainActivity : AppCompatActivity() {
         } else {
             onActivityResult(0, Activity.RESULT_OK, null)
         }
+    }
+
+    fun threadMain() : Thread {
+        mainThread = object: Thread(){
+            public override fun run() {
+                if (! hasIpThread) {
+                    hasIpThread = true
+                    threadCPP()
+                }
+                runOnUiThread { sample_text.text = beginWork() }
+//            if (! hasStatsThread) {
+//                hasStatsThread = true
+//                threadStats()
+//            }
+                hasMainThread = false
+            }
+        }
+        println("Start thread")
+        mainThread.start()
+        return mainThread
     }
 
     fun threadCPP() : Thread {

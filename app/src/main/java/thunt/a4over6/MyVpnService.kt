@@ -17,12 +17,13 @@ class MyVpnService: VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         println("on VPN start")
+        println(intent?.getStringExtra("ip"))
         builder.setMtu(1000)
         builder.addAddress(intent?.getStringExtra("ip"), 24)
         builder.addRoute(intent?.getStringExtra("route"), 0)
         builder.addDnsServer(intent?.getStringExtra("dns1"))
         builder.addDnsServer(intent?.getStringExtra("dns2"))
-        builder.addDnsServer(intent?.getStringExtra("dns3"))
+//        builder.addDnsServer(intent?.getStringExtra("dns3"))
         builder.setSession("MyVpnService")
         protect(Integer.parseInt(intent?.getStringExtra("socket")))
         virtualDescriptor = builder.establish()

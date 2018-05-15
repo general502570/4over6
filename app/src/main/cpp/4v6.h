@@ -128,6 +128,28 @@ int safe_recv(int socket, char *buffer, int length) {
 }
 
 inline
+int safe_read(int fd, char *buffer, int length) {
+    size_t nleft = length;
+    ssize_t nsend = 0;
+    char *bufp = buffer;
+
+    while (nleft > 0)
+    {
+        if ((nsend = read(fd, bufp, nleft)) <= 0)
+        {
+            if (errno == EINTR) {
+                nsend = 0;
+            } else {
+                return -1;
+            }
+        }
+        nleft -= nsend;
+        bufp += nsend;
+    }
+    return length;
+}
+
+inline
 int safe_send(int socket, char *buffer, int length) {
     size_t nleft = length;
     ssize_t nsend = 0;

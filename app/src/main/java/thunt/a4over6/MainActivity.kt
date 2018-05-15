@@ -20,11 +20,15 @@ class MainActivity : AppCompatActivity() {
         mainbutton.setOnClickListener{
             sample_text.text = stringclickedFromJNI(1)
             println("button clicked")
-            if (! hasThread) {
-                hasThread = true
+            if (! hasIpThread) {
+                hasIpThread = true
                 threadCPP()
             }
             sample_text.text = beginWork()
+//            if (! hasStatsThread) {
+//                hasStatsThread = true
+//                threadStats()
+//            }
         }
     }
 
@@ -35,14 +39,17 @@ class MainActivity : AppCompatActivity() {
     external fun stringFromJNI(): String
     external fun stringclickedFromJNI(x: Int): String
     external fun startCPP(): Int
-    val JAVA_JNI_PIPE_JTOC_PATH = "/data/data/thunt.a4over6/4over6.jtoc"
-    val JAVA_JNI_PIPE_CTOJ_PATH = "/data/data/thunt.a4over6/4over6.ctoj"
+    //val JAVA_JNI_PIPE_JTOC_PATH = "/data/data/thunt.a4over6/4over6.jtoc"
+    //val JAVA_JNI_PIPE_CTOJ_PATH = "/data/data/thunt.a4over6/4over6.ctoj"
 
     val JNI_IP_PIPE_PATH    = "/data/data/thunt.a4over6/4over6.ip"
     val JNI_STATS_PIPE_PATH = "/data/data/thunt.a4over6/4over6.stats"
 
     lateinit var ipPacket: IpPacket
-    var hasThread: Boolean = false
+    lateinit var ipThread: Thread
+    lateinit var statsThread: Thread
+    var hasIpThread: Boolean = false
+    var hasStatsThread: Boolean = false
 
     class IpPacket(info: String) {
         val infopiece = info.split(" ")
@@ -53,10 +60,18 @@ class MainActivity : AppCompatActivity() {
         val dns3 = infopiece[4]
     }
 
-    fun ReadPipe(): String? {
-        val file = File(JNI_IP_PIPE_PATH)
+    class StatsPacket(info: String) {
+        val infopiece = info.split(" ")
+        val outlen = infopiece[0]
+        val outtimes = infopiece[1]
+        val inlen = infopiece[2]
+        val intimes = infopiece[3]
+        val isvalid = infopiece[4]
+    }
+
+    fun ReadPipe(addr: String): String? {
+        val file = File(addr)
         val bufferedReader: BufferedReader = file.bufferedReader()
-        println("Readpipebegin")
         val inputString = bufferedReader.use { it.readLine() }
         println("Readpipe, " + inputString)
         bufferedReader.close()
@@ -66,24 +81,40 @@ class MainActivity : AppCompatActivity() {
     fun StartVPN() {
         val intent = VpnService.prepare(this)
         if (intent != null) {
-            println("intent not null")
             startActivityForResult(intent, 0);
         } else {
-            println("intent null")
             onActivityResult(0, Activity.RESULT_OK, null)
         }
     }
 
     fun threadCPP() : Thread {
-        val thread = object: Thread(){
+        ipThread = object: Thread(){
             public override fun run() {
                 startCPP()
             }
         }
         println("Start thread")
-        thread.start()
-        println("Start after thread")
-        return thread
+        ipThread.start()
+        return ipThread
+    }
+
+    fun threadStats() : Thread {
+        statsThread = object: Thread(){
+            public override fun run() {
+                updateStream()
+            }
+        }
+        println("Start stats thread")
+        statsThread.start()
+        return statsThread
+    }
+
+    fun updateStream() {
+        while (true) {
+            var statsstring? = ReadPipe(JNI_STATS_PIPE_PATH)
+            //updateStats(statsstring)
+            Thread.sleep(1000)
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -94,18 +125,17 @@ class MainActivity : AppCompatActivity() {
             serviceIntent.putExtra("dns1", ipPacket.dns1)
             serviceIntent.putExtra("dns2", ipPacket.dns2)
             serviceIntent.putExtra("dns3", ipPacket.dns3)
-            println("on activity result")
             startService(serviceIntent)
-            println("after activity result")
+            println("on activity result")
         }
         super.onActivityResult(requestCode, resultCode, data)
     }
 
     fun beginWork() : String {
         println("Begin work")
-        var ipstring = ReadPipe()
+        var ipstring = ReadPipe(JNI_IP_PIPE_PATH)
         while (ipstring == null) {
-            ipstring = ReadPipe()
+            ipstring = ReadPipe(JNI_IP_PIPE_PATH)
         }
         println("Got ip")
         ipPacket = IpPacket(ipstring)

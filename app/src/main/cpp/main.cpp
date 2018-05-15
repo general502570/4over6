@@ -2,6 +2,7 @@
 
 // global status
 bool alive = false;
+bool dead = true;
 bool getIP = false;
 
 // heart beat stats
@@ -28,15 +29,17 @@ void connect2Server() {
     bzero(&server_socket, sizeof(server_socket));
     server_socket.sin6_family = AF_INET6;
     server_socket.sin6_port = htons(SERVER_PORT);
-    while(inet_pton(AF_INET6, SERVER_ADDR, &server_socket.sin6_addr) == -1)
-        sleep(1);
+    CHK(inet_pton(AF_INET6, SERVER_ADDR, &server_socket.sin6_addr));
     LOGD("v6 address set\n");
 
     CHK(client_socket = socket(AF_INET6, SOCK_STREAM, 0));
+
     LOGD("client_socket: %d\n", client_socket);
     LOGD("create client socket v6\n");
 
-    CHK(connect(client_socket, (const struct sockaddr *)&server_socket, sizeof(server_socket)));
+    int status;
+    while ((status = connect(client_socket, (const struct sockaddr *)&server_socket, sizeof(server_socket))) == -1)
+        sleep(1);
     LOGD("connect to server\n");
 }
 
@@ -167,6 +170,8 @@ void* initTimer(void *foo) {
         sleep(1);
     }
 
+    while (!dead) { usleep(10000); }
+
     bzero(stats_buf, MAX_BUF_SIZE+1);
     sprintf(stats_buf, "-1 -1 -1 -1 -1%c", '\0');
     int wrt_len;
@@ -236,6 +241,7 @@ void* stopListening(void *foo) {
 void init() {
     // global variables init
     alive = true;
+    dead = false;
     getIP = false;
     heart_beat_cnt = 0;
     heart_beat_recv_time = 0;
@@ -245,8 +251,8 @@ void init() {
     pthread_mutex_init(&in_stats, NULL);
 
     initPipe();
-//    connect2Server();
-     connect2ServerV4();
+    connect2Server();
+    //  connect2ServerV4();
 }
 
 // close all of the handler, release the socket and destory the mutex lock
@@ -345,6 +351,8 @@ int main() {
             LOGD("Type: Unknown type %d.\n", msg.type);
         }
     }
+
+    dead = true;
 
     clear();
     return 0;

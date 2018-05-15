@@ -2,8 +2,8 @@
 #ifndef IP4V6
 #define IP4V6
 
-#include <jni.h>
-#include <android/log.h>
+ #include <jni.h>
+ #include <android/log.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,7 +30,7 @@
 #define SERVER_V4_ADDR "159.65.105.177"
 #define SERVER_PORT 5678
 
-#define MAX_HEART_BEAT_CNT 19
+#define MAX_HEART_BEAT_CNT 20
 
 #define MSG_BUF_SIZE 4096
 #define MAX_BUF_SIZE 4104
@@ -108,6 +108,26 @@ void clear();
 int main();
 
 inline
+int safe_recv(int socket, char *buffer, int length) {
+    size_t nleft = length;
+    ssize_t nsend = 0;
+    char *bufp = buffer;
+
+    while (nleft > 0) {
+        if ((nsend = recv(socket, bufp, nleft, 0)) <= 0) {
+            if (errno == EINTR) {
+                nsend = 0;
+            } else {
+                return -1;
+            }
+        }
+        nleft -= nsend;
+        bufp += nsend;
+    }
+    return length;
+}
+
+inline
 int safe_send(int socket, char *buffer, int length) {
     size_t nleft = length;
     ssize_t nsend = 0;
@@ -124,7 +144,6 @@ int safe_send(int socket, char *buffer, int length) {
         nleft -= nsend;
         bufp += nsend;
     }
-    LOGD("send length: %d\n", length);
     return length;
 }
 

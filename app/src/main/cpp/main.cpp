@@ -2,7 +2,8 @@
 
 // global status
 bool alive = false;
-bool dead = true;
+bool main_dead = true;
+bool comm_dead = true;
 bool getIP = false;
 
 // heart beat stats
@@ -88,6 +89,88 @@ void initPipe() {
     CHK(close(des_pipe));
 }
 
+inline int safe_read(int fd, char *buffer, int length)
+{
+    if (!alive) {
+        return length;
+    }
+    size_t nleft = length;
+    ssize_t nsend = 0;
+    char *bufp = buffer;
+
+    while (alive && nleft > 0)
+    {
+        if ((nsend = read(fd, bufp, nleft)) <= 0)
+        {
+            if (errno == EINTR)
+            {
+                nsend = 0;
+            }
+            else
+            {
+                return -1;
+            }
+        }
+        nleft -= nsend;
+        bufp += nsend;
+    }
+    return length;
+}
+
+inline int safe_send(int socket, char *buffer, int length) {
+    if (!alive) {
+        return length;
+    }
+    size_t nleft = length;
+    ssize_t nsend = 0;
+    char *bufp = buffer;
+
+    while (alive && nleft > 0)
+    {
+        if ((nsend = send(socket, bufp, nleft, 0)) <= 0)
+        {
+            if (errno == EINTR)
+            {
+                nsend = 0;
+            }
+            else
+            {
+                return -1;
+            }
+        }
+        nleft -= nsend;
+        bufp += nsend;
+    }
+    return length;
+}
+
+inline int safe_write(int fd, char *buffer, int length) {
+    if (!alive) {
+        return length;
+    }
+    size_t nleft = length;
+    ssize_t nwrite = 0;
+    char *bufp = buffer;
+
+    while (alive && nleft > 0)
+    {
+        if ((nwrite = write(fd, bufp, nleft)) < 0)
+        {
+            if (errno == EINTR)
+            {
+                nwrite = 0;
+            }
+            else
+            {
+                return -1;
+            }
+        }
+        nleft -= nwrite;
+        bufp += nwrite;
+    }
+    return length;
+}
+
 int readPipe(char* buffer) {
     CHK(des_pipe = open(JNI_DES_PIPE_PATH, O_RDONLY));
     int len = read(des_pipe, buffer, MAX_BUF_SIZE);
@@ -109,6 +192,8 @@ int writePipe(int type, char *buffer, int length) {
 }
 
 void* initTimer(void *foo) {
+    comm_dead = false;
+
     struct Message heart_beat;
     bzero(&heart_beat, sizeof(heart_beat));
     heart_beat.type = MSG_HEARTBEAT;
@@ -170,7 +255,7 @@ void* initTimer(void *foo) {
         sleep(1);
     }
 
-    while (!dead) { usleep(10000); }
+    while (!main_dead) { usleep(10000); }
 
     bzero(stats_buf, MAX_BUF_SIZE+1);
     sprintf(stats_buf, "-1 -1 -1 -1 -1%c", '\0');
@@ -180,6 +265,7 @@ void* initTimer(void *foo) {
         LOGE("write stats to stats_pipe error!\n");
     }
     LOGD("timer thread exit\n");
+    comm_dead = true;
     return NULL;
 }
 
@@ -231,7 +317,8 @@ void* stopListening(void *foo) {
         CHK(len = readPipe(buffer));
         if (buffer[0] == 'q' && buffer[1] == '1' && buffer[2] == 'j') {
             alive = false;
-            dead = true;
+            main_dead = true;
+            comm_dead = true;
             heart_beat_recv_time = time((time_t *)NULL);
             LOGD("alive is false");
         }
@@ -243,7 +330,8 @@ void* stopListening(void *foo) {
 void init() {
     // global variables init
     alive = true;
-    dead = false;
+    main_dead = false;
+    comm_dead = false;
     getIP = false;
     heart_beat_cnt = 0;
     heart_beat_recv_time = 0;
@@ -354,8 +442,8 @@ int main() {
         }
     }
 
-    dead = true;
-
     clear();
+    main_dead = true;
+    while (!comm_dead) { usleep(10000); }
     return 0;
 }

@@ -79,7 +79,7 @@ struct Message
         if ((val = (expr)) == -1)                                         \
         {                                                                \
             LOGF("(line %d): ERROR - %d:%s.\n", __LINE__, val, strerror(errno)); \
-            exit(1);                                                     \
+            /*exit(1);*/                                                     \
         }                                                                \
     } while (0)
 
@@ -123,68 +123,6 @@ int safe_recv(int socket, char *buffer, int length) {
         }
         nleft -= nsend;
         bufp += nsend;
-    }
-    return length;
-}
-
-inline
-int safe_read(int fd, char *buffer, int length) {
-    size_t nleft = length;
-    ssize_t nsend = 0;
-    char *bufp = buffer;
-
-    while (nleft > 0)
-    {
-        if ((nsend = read(fd, bufp, nleft)) <= 0)
-        {
-            if (errno == EINTR) {
-                nsend = 0;
-            } else {
-                return -1;
-            }
-        }
-        nleft -= nsend;
-        bufp += nsend;
-    }
-    return length;
-}
-
-inline
-int safe_send(int socket, char *buffer, int length) {
-    size_t nleft = length;
-    ssize_t nsend = 0;
-    char *bufp = buffer;
-
-    while (nleft > 0) {
-        if ((nsend = send(socket, bufp, nleft, 0)) <= 0) {
-            if (errno == EINTR) {
-                nsend = 0;
-            } else {
-                return -1;
-            }
-        }
-        nleft -= nsend;
-        bufp += nsend;
-    }
-    return length;
-}
-
-inline
-int safe_write(int fd, char *buffer, int length) {
-    size_t nleft = length;
-    ssize_t nwrite = 0;
-    char *bufp = buffer;
-
-    while (nleft > 0) {
-        if ((nwrite = write(fd, bufp, nleft)) < 0) {
-            if (errno == EINTR) {
-                nwrite = 0;
-            } else {
-                return -1;
-            }
-        }
-        nleft -= nwrite;
-        bufp += nwrite;
     }
     return length;
 }

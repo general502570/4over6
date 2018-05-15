@@ -1,3 +1,4 @@
+#pragma once
 #ifndef IP4V6
 #define IP4V6
 
@@ -20,8 +21,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#define OUR_SERVER
+#ifndef OUR_SERVER
 #define SERVER_ADDR "2402:f000:1:4417::900"
-// #define SERVER_ADDR "::1"
+#else
+#define SERVER_ADDR "2604:a880:2:d0::15d3:5001"
+#endif
+#define SERVER_V4_ADDR "159.65.105.177"
 #define SERVER_PORT 5678
 
 #define MAX_HEART_BEAT_CNT 19
@@ -100,5 +106,46 @@ void* stopListening(void *foo);
 void init();
 void clear();
 int main();
+
+inline
+int safe_send(int socket, char *buffer, int length) {
+    size_t nleft = length;
+    ssize_t nsend = 0;
+    char *bufp = buffer;
+
+    while (nleft > 0) {
+        if ((nsend = send(socket, bufp, nleft, 0)) <= 0) {
+            if (errno == EINTR) {
+                nsend = 0;
+            } else {
+                return -1;
+            }
+        }
+        nleft -= nsend;
+        bufp += nsend;
+    }
+    LOGD("send length: %d\n", length);
+    return length;
+}
+
+inline
+int safe_write(int fd, char *buffer, int length) {
+    size_t nleft = length;
+    ssize_t nwrite = 0;
+    char *bufp = buffer;
+
+    while (nleft > 0) {
+        if ((nwrite = write(fd, bufp, nleft)) < 0) {
+            if (errno == EINTR) {
+                nwrite = 0;
+            } else {
+                return -1;
+            }
+        }
+        nleft -= nwrite;
+        bufp += nwrite;
+    }
+    return length;
+}
 
 #endif // !IP4V6

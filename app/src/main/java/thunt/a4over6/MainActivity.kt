@@ -40,7 +40,6 @@ class MainActivity : AppCompatActivity() {
 
     val JNI_IP_PIPE_PATH    = "/data/data/thunt.a4over6/4over6.ip"
     val JNI_STATS_PIPE_PATH = "/data/data/thunt.a4over6/4over6.stats"
-    val JNI_DES_PIPE_PATH   = "/data/data/thunt.a4over6/4over6.des"
 
     lateinit var ipPacket: IpPacket
     var hasThread: Boolean = false
@@ -56,8 +55,7 @@ class MainActivity : AppCompatActivity() {
 
     fun ReadPipe(): String? {
         val file = File(JNI_IP_PIPE_PATH)
-        //val bufferedReader: BufferedReader = file.bufferedReader()
-        val bufferedReader = BufferedReader(FileReader(file))
+        val bufferedReader: BufferedReader = file.bufferedReader()
         println("Readpipebegin")
         val inputString = bufferedReader.use { it.readLine() }
         println("Readpipe, " + inputString)
@@ -65,18 +63,13 @@ class MainActivity : AppCompatActivity() {
         return inputString
     }
 
-    fun WritePipe(cont: String) {
-        val file = File(JNI_DES_PIPE_PATH)
-        val bufferWriter: BufferedWriter = file.bufferedWriter()
-        bufferWriter.use { out->out.write(cont) }
-        bufferWriter.close()
-    }
-
     fun StartVPN() {
         val intent = VpnService.prepare(this)
         if (intent != null) {
+            println("intent not null")
             startActivityForResult(intent, 0);
         } else {
+            println("intent null")
             onActivityResult(0, Activity.RESULT_OK, null)
         }
     }
@@ -101,6 +94,9 @@ class MainActivity : AppCompatActivity() {
             serviceIntent.putExtra("dns1", ipPacket.dns1)
             serviceIntent.putExtra("dns2", ipPacket.dns2)
             serviceIntent.putExtra("dns3", ipPacket.dns3)
+            println("on activity result")
+            startService(serviceIntent)
+            println("after activity result")
         }
         super.onActivityResult(requestCode, resultCode, data)
     }
@@ -111,8 +107,10 @@ class MainActivity : AppCompatActivity() {
         while (ipstring == null) {
             ipstring = ReadPipe()
         }
-        println("Get ip")
-        return "Successfully read!"
+        println("Got ip")
+        ipPacket = IpPacket(ipstring)
+        StartVPN()
+        return ipstring
     }
 
     companion object {

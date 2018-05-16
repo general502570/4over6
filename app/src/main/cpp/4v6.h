@@ -33,7 +33,7 @@
 #define MAX_HEART_BEAT_CNT 20
 
 #define MSG_BUF_SIZE 4096
-#define MAX_BUF_SIZE 4104
+#define MAX_BUF_SIZE 4200
 struct Message
 {
     int length;

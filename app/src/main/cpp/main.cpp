@@ -2,7 +2,7 @@
 
 // global status
 bool alive = false;
-bool hasIP = false;
+bool getIP = false;
 
 // heart beat stats
 int heart_beat_recv_time;
@@ -16,12 +16,12 @@ int ip_pipe;
 //back-end to front-end stats handle
 int stats_pipe;
 // back-end to server handle
-int tunnel_handler;
+int vpn_tunnel;
 
 // network stats, collected by backend and displayed by frontend
-int outlen, outtimes, inlen, intimes;
+int out_len, out_times, in_len, in_times;
 //locks for stats
-pthread_mutex_t stat_out, stat_in;
+pthread_mutex_t out_stats, in_stats;
 
 void connect2Server() {
     struct sockaddr_in6 server_socket;
@@ -93,7 +93,6 @@ int readPipe(char* buffer) {
 }
 
 int writePipe(int type, char *buffer, int length) {
-    int len;
     if (type == WRITE_IP) {
         CHK(ip_pipe = open(JNI_IP_PIPE_PATH, O_RDWR)); //debug only
         CHK(safe_write(ip_pipe, buffer, length));
@@ -116,14 +115,16 @@ void* initTimer(void *foo) {
     bzero(buffer, MAX_BUF_SIZE+1);
     memcpy(buffer, &heart_beat, 5);
 
-    char fifo_buf[MAX_BUF_SIZE+1];
+    char stats_buf[MAX_BUF_SIZE+1];
+
+    int prev_out_len = 0, prev_in_len = 0;
 
     while(alive) {
         int current_time = time((time_t*) NULL);
         if (current_time - heart_beat_recv_time > 60) {
             LOGE("Server timeout\n");
-            heart_beat_recv_time = current_time;
-//            exit(1);
+            // heart_beat_recv_time = current_time;
+            exit(1);
         }
         if (heart_beat_cnt == 0) {
             int len;
@@ -140,36 +141,37 @@ void* initTimer(void *foo) {
             heart_beat_cnt--;
         }
 
-        sprintf(fifo_buf, "%d %d %d %d %d%c", outlen, outtimes, inlen, intimes, 54, '\0');
+        sprintf(stats_buf, "%d %d %d %d %d%c", out_len, out_times, in_len, in_times, 54, '\0');
+
+        // monitor the net speed
+        static int cnt = 0;
+        if (cnt % 5 == 0)
+            LOGD("out speed: %2f KB/s, in speed: %2f Kb/s", (float)(out_len-prev_out_len)/1000.0, (in_len-prev_in_len)/1000.0);
+        cnt ++;
+
         int write_len;
 
-        // CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC));
-        // CHK_WRITE(write_len = write(stats_pipe, fifo_buf, strlen(fifo_buf) + 1));
-        // CHK(close(stats_pipe));
-        CHK_WRITE(write_len = writePipe(WRITE_STATS, fifo_buf, strlen(fifo_buf) + 1));
-        if (write_len != strlen(fifo_buf) + 1) {
+        CHK_WRITE(write_len = writePipe(WRITE_STATS, stats_buf, strlen(stats_buf)));
+        if (write_len != strlen(stats_buf)) {
             LOGE("write stats to stats_pipe error!\n");
         }
 
         //clear stats
-        pthread_mutex_lock(&stat_out);
-        outlen = outtimes = 0;
-        pthread_mutex_unlock(&stat_out);
-        pthread_mutex_lock(&stat_in);
-        inlen = intimes = 0;
-        pthread_mutex_unlock(&stat_in);
+        pthread_mutex_lock(&out_stats);
+        out_len = out_times = 0;
+        pthread_mutex_unlock(&out_stats);
+        pthread_mutex_lock(&in_stats);
+        in_len = in_times = 0;
+        pthread_mutex_unlock(&in_stats);
 
         sleep(1);
     }
 
-    bzero(fifo_buf, MAX_BUF_SIZE+1);
-    sprintf(fifo_buf, "-1 -1 -1 -1 -1%c", '\0');
+    bzero(stats_buf, MAX_BUF_SIZE+1);
+    sprintf(stats_buf, "-1 -1 -1 -1 -1%c", '\0');
     int wrt_len;
-    // CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR | O_CREAT | O_TRUNC));
-    // CHK_WRITE(wrt_len = write(stats_pipe, fifo_buf, strlen(fifo_buf) + 1));
-    // CHK(close(stats_pipe));
-    CHK_WRITE(wrt_len = writePipe(WRITE_STATS, fifo_buf, strlen(fifo_buf) + 1));
-    if (wrt_len != strlen(fifo_buf) + 1) {
+    CHK_WRITE(wrt_len = writePipe(WRITE_STATS, stats_buf, strlen(stats_buf)));
+    if (wrt_len != strlen(stats_buf)) {
         LOGE("write stats to stats_pipe error!\n");
     }
     LOGD("timer thread exit\n");
@@ -187,8 +189,8 @@ void* send2Server(void *foo) {
         bzero(buffer, MAX_BUF_SIZE+1);
         bzero(&msg, sizeof(msg));
 
-        while ((len = read(tunnel_handler, buffer, MAX_BUF_SIZE)) < 0){
-            usleep(100);
+        while ((len = read(vpn_tunnel, buffer, MAX_BUF_SIZE)) < 0){
+            usleep(1000);
         };
 //         LOGD("Get data from frontend. Total %d bytes\n", len);
         msg.length = len + 5;
@@ -202,13 +204,13 @@ void* send2Server(void *foo) {
         if (len != msg.length) {
             LOGE("Send data package error!\n");
         } else {
-             LOGD("Send data package to server, content: %d, %d\n", *(int*)buffer, int(*(buffer+4)));
+            //  LOGD("Send data package to server, content: %d, %d\n", *(int*)buffer, int(*(buffer+4)));
         }
 
-        pthread_mutex_lock(&stat_out);
-        outlen += msg.length - 5;
-        outtimes++;
-        pthread_mutex_unlock(&stat_out);
+        pthread_mutex_lock(&out_stats);
+        out_len += msg.length - 5;
+        out_times++;
+        pthread_mutex_unlock(&out_stats);
     }
     LOGD("send data to server thread exited!\n");
     return NULL;
@@ -234,28 +236,25 @@ void* stopListening(void *foo) {
 void init() {
     // global variables init
     alive = true;
-    hasIP = false;
+    getIP = false;
     heart_beat_cnt = 0;
     heart_beat_recv_time = 0;
-    outlen = outtimes = inlen = intimes = 0;
+    out_len = out_times = in_len = in_times = 0;
 
-    pthread_mutex_init(&stat_out, NULL);
-    pthread_mutex_init(&stat_in, NULL);
+    pthread_mutex_init(&out_stats, NULL);
+    pthread_mutex_init(&in_stats, NULL);
 
     initPipe();
-    connect2Server();
-//     connect2ServerV4();
+//    connect2Server();
+     connect2ServerV4();
 }
 
 // close all of the handler, release the socket and destory the mutex lock
 void clear() {
     CHK(close(client_socket));
-    CHK(close(tunnel_handler));
-    // CHK(close(ip_pipe));
-    // CHK(close(stats_pipe));
-
-    CHK(pthread_mutex_destroy(&stat_out));
-    CHK(pthread_mutex_destroy(&stat_in));
+    CHK(close(vpn_tunnel));
+    CHK(pthread_mutex_destroy(&out_stats));
+    CHK(pthread_mutex_destroy(&in_stats));
 }
 
 int main() {
@@ -288,11 +287,11 @@ int main() {
         }
         msg_len = *(int *)buffer;
         CHK(len = safe_read(client_socket, buffer + 4, msg_len - 4));
-        LOGD("Recv package from server. Should %d bytes, get Total %d bytes.\n", msg_len - 4, len);
+        // LOGD("Recv package from server. Should %d bytes, get Total %d bytes.\n", msg_len - 4, len);
 
         bzero(&msg, sizeof(msg));
         memcpy(&msg, buffer, sizeof(msg));
-        if (!hasIP && msg.type == MSG_IP_RSB) {
+        if (!getIP && msg.type == MSG_IP_RSB) {
             LOGD("Type: IP response. Contents: %s\n", msg.data);
             
             bzero(buffer, MAX_BUF_SIZE+1);
@@ -310,7 +309,6 @@ int main() {
             }
 
             sleep(1);
-            LOGD("len = %d", len);
 
             bzero(buffer, MAX_BUF_SIZE+1);
             while((len = readPipe(buffer)) <= 0){
@@ -318,27 +316,27 @@ int main() {
                 LOGD("read len = %d, content: %d, waiting for handler...\n", len, *(int *)buffer);
             };
 
-            tunnel_handler = int(*(char *)buffer);
-            LOGD("Get tunnel_handler %d from frontend successfully!", tunnel_handler);
-            // tunnel_handler = ntohl(tunnel_handler);
+            vpn_tunnel = int(*(char *)buffer);
+            LOGD("Get vpn_tunnel %d from frontend successfully!", vpn_tunnel);
+            // vpn_tunnel = ntohl(vpn_tunnel);
 
             // send to server thread;
             pthread_t send_thd, stop_thd;
             pthread_create(&send_thd, NULL, send2Server, NULL);
             pthread_create(&stop_thd, NULL, stopListening, NULL);
             // only the first IP response from server will create thread for communication
-            hasIP = true;
+            getIP = true;
         } else if (msg.type == MSG_DATA_RSB) {
             // LOGD("Type: Data response.");
-            CHK_WRITE(len = safe_write(tunnel_handler, msg.data, msg.length - 5));
-            if (len != msg.length -5) {
+            CHK_WRITE(len = safe_write(vpn_tunnel, msg.data, msg.length - 5));
+            if (len != msg.length - 5) {
                 LOGE("Send data to frontend error!\n");
             }
 
-            pthread_mutex_lock(&stat_in);
-            inlen += msg.length - 5;
-            intimes ++;
-            pthread_mutex_unlock(&stat_in);
+            pthread_mutex_lock(&in_stats);
+            in_len += msg.length - 5;
+            in_times ++;
+            pthread_mutex_unlock(&in_stats);
         } else if (msg.type == MSG_HEARTBEAT) {
             LOGD("Type: Heart beat.\n");
             heart_beat_recv_time = int(time((time_t *)NULL));

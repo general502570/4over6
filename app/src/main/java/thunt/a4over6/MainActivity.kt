@@ -5,10 +5,11 @@ import android.content.Intent
 import android.net.VpnService
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
-import android.os.Handler
 import kotlinx.android.synthetic.main.activity_main.*
-import thunt.a4over6.R.id.async
 import java.io.*
+import java.net.Inet6Address
+import java.net.NetworkInterface
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
@@ -22,33 +23,53 @@ class MainActivity : AppCompatActivity() {
         mainbutton.setOnClickListener{
             sample_text.text = stringclickedFromJNI(1)
             println("button clicked")
-            if (! hasMainThread) {
-                hasMainThread = true
-                threadMain()
+            if (! connected) {
+                connected = true
+                mainbutton.text = "STOP"
+                if (!hasMainThread) {
+                    hasMainThread = true
+                    threadMain()
+                }
+            }
+            else {
+                connected = false
+                mainbutton.text = "CONNECT"
+                statsThread.interrupt()
+                stopService(serviceIntent)
+                hasStatsThread = false
+                hasIpThread = false
+                WritePipe_stop()
+                textView_ipv4_addr.text = "IPV4 address: "
+                textView_ipv6_addr.text = "IPV6 address: "
+                textView_upload_speed.text = "upload spped: 0 B/s"
+                textView_download_speed.text = "download speed: 0 B/s"
+                textView_time_duration.text = "time duration: 0:00:00"
             }
         }
     }
 
-    /**
-     * A native method that is implemented by the 'native-lib' native library,
-     * which is packaged with this application.
-     */
     external fun stringFromJNI(): String
     external fun stringclickedFromJNI(x: Int): String
     external fun startCPP(): Int
-    //val JAVA_JNI_PIPE_JTOC_PATH = "/data/data/thunt.a4over6/4over6.jtoc"
-    //val JAVA_JNI_PIPE_CTOJ_PATH = "/data/data/thunt.a4over6/4over6.ctoj"
 
     val JNI_IP_PIPE_PATH    = "/data/data/thunt.a4over6/4over6.ip"
     val JNI_STATS_PIPE_PATH = "/data/data/thunt.a4over6/4over6.stats"
+    val JNI_DES_PIPE_PATH   = "/data/data/thunt.a4over6/4over6.des"
 
     lateinit var ipPacket: IpPacket
     lateinit var ipThread: Thread
     lateinit var statsThread: Thread
     lateinit var mainThread: Thread
+    lateinit var beginTime: Date
+    lateinit var serviceIntent: Intent
     var hasIpThread: Boolean = false
     var hasStatsThread: Boolean = false
     var hasMainThread: Boolean = false
+    var connected: Boolean = false
+    var upload_flow: Long = 0
+    var download_flow: Long = 0
+    var upload_packets: Long = 0
+    var download_packets: Long = 0
 
     class IpPacket(info: String) {
         val infopiece = info.split(" ")
@@ -78,6 +99,13 @@ class MainActivity : AppCompatActivity() {
         return inputString
     }
 
+    fun WritePipe_stop() {
+        val file = File(JNI_DES_PIPE_PATH)
+        val bufferWriter: BufferedWriter = file.bufferedWriter()
+        bufferWriter.use { out->out.write("q1j") }
+        bufferWriter.close()
+    }
+
     fun StartVPN() {
         val intent = VpnService.prepare(this)
         if (intent != null) {
@@ -95,10 +123,10 @@ class MainActivity : AppCompatActivity() {
                     threadCPP()
                 }
                 runOnUiThread { sample_text.text = beginWork() }
-//            if (! hasStatsThread) {
-//                hasStatsThread = true
-//                threadStats()
-//            }
+                if (! hasStatsThread) {
+                    hasStatsThread = true
+                    threadStats()
+                }
                 hasMainThread = false
             }
         }
@@ -118,10 +146,53 @@ class MainActivity : AppCompatActivity() {
         return ipThread
     }
 
+    fun toString2(x: Long): String {
+        if (x < 10)
+            return "0" + x.toString()
+        return x.toString()
+    }
+
+    fun toKB(x: Long): String {
+        if (x < 1024)
+            return x.toString() + " B"
+        return (x / 1024).toString() + " KB"
+    }
+
     fun threadStats() : Thread {
         statsThread = object: Thread(){
             public override fun run() {
-                updateStream()
+                try {
+                    beginTime = Date()
+                    while (true) {
+                        var statsstring = ReadPipe(JNI_STATS_PIPE_PATH)
+                        runOnUiThread { sample_text.text = statsstring }
+                        if (statsstring == null)
+                            statsstring = "0 0 0 0 0"
+                        var statsPackets = StatsPacket(statsstring)
+                        if (statsPackets.isvalid == "-1")
+                            statsPackets = StatsPacket("0 0 0 0 0")
+                        upload_flow += statsPackets.inlen.toLong()
+                        upload_packets += statsPackets.intimes.toLong()
+                        download_flow += statsPackets.outlen.toLong()
+                        download_packets += statsPackets.outtimes.toLong()
+                        var timeDuration = (Date().time - beginTime.time) / 1000
+                        var hour = timeDuration / 3600
+                        var minute = (timeDuration % 3600) / 60
+                        var second = timeDuration % 60
+                        runOnUiThread {
+                            textView_time_duration.text = "time duration: " + toString2(hour) + ":" + toString2(minute) + ":" + toString2(second)
+                            textView_upload_speed.text = "upload spped: " + toKB(statsPackets.inlen.toLong()) + "/s"
+                            textView_download_speed.text = "download speed: " + toKB(statsPackets.outlen.toLong()) + "/s"
+                            textView_upload_flow.text = "upload flow: " + toKB(upload_flow)
+                            textView_download_flow.text = "download flow:" + toKB(download_flow)
+                            textView_upload_packets.text = "upload packets: " + upload_packets.toString()
+                            textView_download_packets.text = "download packets: " + download_packets.toString()
+                        }
+                        Thread.sleep(750)
+                    }
+                } catch (e: InterruptedException) {
+                    println("interrupted")
+                }
             }
         }
         println("Start stats thread")
@@ -129,17 +200,9 @@ class MainActivity : AppCompatActivity() {
         return statsThread
     }
 
-    fun updateStream() {
-        while (true) {
-//            var statsstring? = ReadPipe(JNI_STATS_PIPE_PATH)
-//            updateStats(statsstring)
-            Thread.sleep(1000)
-        }
-    }
-
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (resultCode == Activity.RESULT_OK){
-            val serviceIntent = Intent(this, MyVpnService::class.java)
+            serviceIntent = Intent(this, MyVpnService::class.java)
             serviceIntent.putExtra("ip", ipPacket.ip)
             serviceIntent.putExtra("route", ipPacket.route)
             serviceIntent.putExtra("dns1", ipPacket.dns1)
@@ -152,6 +215,20 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
     }
 
+    fun getLocalIpAddress(): String {
+        var en = NetworkInterface.getNetworkInterfaces()
+        while (en.hasMoreElements()) {
+            var intf = en.nextElement()
+            var enumIpAddr = intf.inetAddresses
+            while (enumIpAddr.hasMoreElements()) {
+                var inetAddress = enumIpAddr.nextElement()
+                if (!inetAddress.isLoopbackAddress && inetAddress is Inet6Address)
+                    return inetAddress.hostAddress
+            }
+        }
+        return ""
+    }
+
     fun beginWork() : String {
         println("Begin work")
         var ipstring = ReadPipe(JNI_IP_PIPE_PATH)
@@ -160,6 +237,11 @@ class MainActivity : AppCompatActivity() {
         }
         println("Got ip")
         ipPacket = IpPacket(ipstring)
+        val ipv6 = getLocalIpAddress()
+        runOnUiThread {
+            textView_ipv4_addr.text = "IPV4 address: " + ipPacket.ip
+            textView_ipv6_addr.text = "IPV6 address: " + ipv6
+        }
         StartVPN()
         return ipstring
     }

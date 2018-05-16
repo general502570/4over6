@@ -28,7 +28,8 @@ void connect2Server() {
     bzero(&server_socket, sizeof(server_socket));
     server_socket.sin6_family = AF_INET6;
     server_socket.sin6_port = htons(SERVER_PORT);
-    CHK(inet_pton(AF_INET6, SERVER_ADDR, &server_socket.sin6_addr));
+    while(inet_pton(AF_INET6, SERVER_ADDR, &server_socket.sin6_addr) == -1)
+        sleep(1);
     LOGD("v6 address set\n");
 
     CHK(client_socket = socket(AF_INET6, SOCK_STREAM, 0));
@@ -101,7 +102,7 @@ int writePipe(int type, char *buffer, int length) {
         CHK(stats_pipe = open(JNI_STATS_PIPE_PATH, O_RDWR));
         CHK(safe_write(stats_pipe, buffer, length));
         CHK(close(stats_pipe));
-    }
+}
     return length;
 }
 

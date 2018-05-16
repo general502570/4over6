@@ -34,16 +34,13 @@ class MainActivity : AppCompatActivity() {
             else {
                 connected = false
                 mainbutton.text = "CONNECT"
-                statsThread.interrupt()
-                stopService(serviceIntent)
-                hasStatsThread = false
                 hasIpThread = false
                 WritePipe_stop()
                 textView_ipv4_addr.text = "IPV4 address: "
                 textView_ipv6_addr.text = "IPV6 address: "
                 textView_upload_speed.text = "upload spped: 0 B/s"
                 textView_download_speed.text = "download speed: 0 B/s"
-                textView_time_duration.text = "time duration: 0:00:00"
+                textView_time_duration.text = "time duration: 00:00:00"
             }
         }
     }
@@ -169,8 +166,10 @@ class MainActivity : AppCompatActivity() {
                         if (statsstring == null)
                             statsstring = "0 0 0 0 0"
                         var statsPackets = StatsPacket(statsstring)
-                        if (statsPackets.isvalid == "-1")
+                        if (statsPackets.isvalid == "-1") {
                             statsPackets = StatsPacket("0 0 0 0 0")
+                            break
+                        }
                         upload_flow += statsPackets.inlen.toLong()
                         upload_packets += statsPackets.intimes.toLong()
                         download_flow += statsPackets.outlen.toLong()
@@ -184,12 +183,15 @@ class MainActivity : AppCompatActivity() {
                             textView_upload_speed.text = "upload spped: " + toKB(statsPackets.inlen.toLong()) + "/s"
                             textView_download_speed.text = "download speed: " + toKB(statsPackets.outlen.toLong()) + "/s"
                             textView_upload_flow.text = "upload flow: " + toKB(upload_flow)
-                            textView_download_flow.text = "download flow:" + toKB(download_flow)
+                            textView_download_flow.text = "download flow: " + toKB(download_flow)
                             textView_upload_packets.text = "upload packets: " + upload_packets.toString()
                             textView_download_packets.text = "download packets: " + download_packets.toString()
                         }
                         Thread.sleep(750)
                     }
+                    statsThread.interrupt()
+                    stopService(serviceIntent)
+                    hasStatsThread = false
                 } catch (e: InterruptedException) {
                     println("interrupted")
                 }

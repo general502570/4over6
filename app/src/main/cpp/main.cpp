@@ -231,6 +231,8 @@ void* stopListening(void *foo) {
         CHK(len = readPipe(buffer));
         if (buffer[0] == 'q' && buffer[1] == '1' && buffer[2] == 'j') {
             alive = false;
+            dead = true;
+            heart_beat_recv_time = time((time_t *)NULL);
             LOGD("alive is false");
         }
     }

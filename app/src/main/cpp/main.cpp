@@ -118,14 +118,14 @@ inline int safe_read(int fd, char *buffer, int length)
 }
 
 inline int safe_send(int socket, char *buffer, int length) {
-    if (!alive) {
-        return length;
-    }
+    // if (!alive) {
+    //     return length;
+    // }
     size_t nleft = length;
     ssize_t nsend = 0;
     char *bufp = buffer;
 
-    while (alive && nleft > 0)
+    while (nleft > 0)
     {
         if ((nsend = send(socket, bufp, nleft, 0)) <= 0)
         {
@@ -356,13 +356,15 @@ void clear() {
 
 int main() {
     init();
+
+    int timer_thd_id;
     char buffer[MAX_BUF_SIZE+1];
     bzero(buffer, MAX_BUF_SIZE + 1);
 
     // heart beat thread
     pthread_t heart_beat_thd;
     heart_beat_recv_time = time((time_t *)NULL);
-    pthread_create(&heart_beat_thd, NULL, initTimer, NULL);
+    timer_thd_id = pthread_create(&heart_beat_thd, NULL, initTimer, NULL);
 
     // require IP from server
     struct Message msg;
@@ -443,8 +445,9 @@ int main() {
         }
     }
 
-    clear();
     main_dead = true;
-    while (!comm_dead) { usleep(10000); }
+    clear();
+    // while (!comm_dead) { usleep(10000); }
+    pthread_join(timer_thd_id, NULL);
     return 0;
 }

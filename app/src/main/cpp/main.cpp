@@ -145,14 +145,15 @@ inline int safe_send(int socket, char *buffer, int length) {
 }
 
 inline int safe_write(int fd, char *buffer, int length) {
-    if (!alive) {
-        return length;
-    }
+//    if (comm_dead) {
+//        return length;
+//    }
     size_t nleft = length;
     ssize_t nwrite = 0;
     char *bufp = buffer;
 
-    while (alive && nleft > 0)
+    while (nleft > 0)
+//        while (!comm_dead && nleft > 0)
     {
         if ((nwrite = write(fd, bufp, nleft)) < 0)
         {
@@ -318,7 +319,7 @@ void* stopListening(void *foo) {
         if (buffer[0] == 'q' && buffer[1] == '1' && buffer[2] == 'j') {
             alive = false;
             main_dead = true;
-            comm_dead = true;
+//            comm_dead = true;
             heart_beat_recv_time = time((time_t *)NULL);
             LOGD("alive is false");
         }

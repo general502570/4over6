@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
             if (! connected) {
                 connected = true
                 mainbutton.text = "STOP"
+                mainbutton.isEnabled = false
                 if (!hasMainThread) {
                     hasMainThread = true
                     threadMain()
@@ -34,11 +35,12 @@ class MainActivity : AppCompatActivity() {
             else {
                 connected = false
                 mainbutton.text = "CONNECT"
+                mainbutton.isEnabled = false
                 hasIpThread = false
                 WritePipe_stop()
                 textView_ipv4_addr.text = "IPV4 address: "
                 textView_ipv6_addr.text = "IPV6 address: "
-                textView_upload_speed.text = "upload spped: 0 B/s"
+                textView_upload_speed.text = "upload speed: 0 B/s"
                 textView_download_speed.text = "download speed: 0 B/s"
                 textView_time_duration.text = "time duration: 00:00:00"
             }
@@ -80,10 +82,10 @@ class MainActivity : AppCompatActivity() {
 
     class StatsPacket(info: String) {
         val infopiece = info.split(" ")
-        val outlen = infopiece[0].trim()
-        val outtimes = infopiece[1].trim()
-        val inlen = infopiece[2].trim()
-        val intimes = infopiece[3].trim()
+        val inlen = infopiece[0].trim()
+        val intimes = infopiece[1].trim()
+        val outlen = infopiece[2].trim()
+        val outtimes = infopiece[3].trim()
         val isvalid = infopiece[4].trim()
     }
 
@@ -91,7 +93,7 @@ class MainActivity : AppCompatActivity() {
         val file = File(addr)
         val bufferedReader: BufferedReader = file.bufferedReader()
         val inputString = bufferedReader.use { it.readLine() }
-        println("Readpipe, " + inputString)
+        println("Readpipe, " + addr + " " + inputString)
         bufferedReader.close()
         return inputString
     }
@@ -106,8 +108,10 @@ class MainActivity : AppCompatActivity() {
     fun StartVPN() {
         val intent = VpnService.prepare(this)
         if (intent != null) {
+            println("vpn not null")
             startActivityForResult(intent, 0);
         } else {
+            println("vpn null")
             onActivityResult(0, Activity.RESULT_OK, null)
         }
     }
@@ -158,6 +162,7 @@ class MainActivity : AppCompatActivity() {
     fun threadStats() : Thread {
         statsThread = object: Thread(){
             public override fun run() {
+                println("thread stats begin")
                 try {
                     beginTime = Date()
                     while (true) {
@@ -180,7 +185,7 @@ class MainActivity : AppCompatActivity() {
                         var second = timeDuration % 60
                         runOnUiThread {
                             textView_time_duration.text = "time duration: " + toString2(hour) + ":" + toString2(minute) + ":" + toString2(second)
-                            textView_upload_speed.text = "upload spped: " + toKB(statsPackets.inlen.toLong()) + "/s"
+                            textView_upload_speed.text = "upload speed: " + toKB(statsPackets.inlen.toLong()) + "/s"
                             textView_download_speed.text = "download speed: " + toKB(statsPackets.outlen.toLong()) + "/s"
                             textView_upload_flow.text = "upload flow: " + toKB(upload_flow)
                             textView_download_flow.text = "download flow: " + toKB(download_flow)
@@ -192,6 +197,10 @@ class MainActivity : AppCompatActivity() {
                     statsThread.interrupt()
                     stopService(serviceIntent)
                     hasStatsThread = false
+                    println("stop connsction")
+                    runOnUiThread {
+                        mainbutton.isEnabled = true
+                    }
                 } catch (e: InterruptedException) {
                     println("interrupted")
                 }
@@ -235,16 +244,18 @@ class MainActivity : AppCompatActivity() {
         println("Begin work")
         var ipstring = ReadPipe(JNI_IP_PIPE_PATH)
         while (ipstring == null) {
+            println("ipnull")
             ipstring = ReadPipe(JNI_IP_PIPE_PATH)
         }
         println("Got ip")
         ipPacket = IpPacket(ipstring)
         val ipv6 = getLocalIpAddress()
+        StartVPN()
         runOnUiThread {
             textView_ipv4_addr.text = "IPV4 address: " + ipPacket.ip
             textView_ipv6_addr.text = "IPV6 address: " + ipv6
+            mainbutton.isEnabled = true
         }
-        StartVPN()
         return ipstring
     }
 
